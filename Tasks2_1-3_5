@@ -1,0 +1,712 @@
+namespace Task2_1 {
+    int main(int argc, char** argv)
+    {
+        int rank;
+
+        MPI_Init(&argc, &argv);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        MPI_Status status;
+        int count;
+        int a = 10;
+        int b = 12;
+        const int SIZE = 15;
+        const int PART = 5;
+
+        if (rank == 0) {
+            int x[SIZE];
+            int y[SIZE];
+            int z[SIZE];
+
+            for (int i = 0; i < SIZE; ++i) {
+                x[i] = rand() % 100 + 1;
+                y[i] = rand() % 100 + 1;
+            }
+
+            printf("x: ");
+            for (int i = 0; i < SIZE; i++) {
+                printf("%d ", x[i]);
+            }
+            printf("\ny: ");
+            for (int i = 0; i < SIZE; i++) {
+                printf("%d ", y[i]);
+            }
+            printf("\n");
+
+            int n = 1;
+            for (int i = 0; i < SIZE; i += PART, n++) {
+                MPI_Send(&x[i], PART, MPI_INT, n, 10, MPI_COMM_WORLD);
+                MPI_Send(&y[i], PART, MPI_INT, n, 10, MPI_COMM_WORLD);
+            }
+
+            n = 1;
+            for (int i = 0; i < SIZE; i += PART, n++) {
+                MPI_Recv(&z[i], PART, MPI_INT, n, 10, MPI_COMM_WORLD, &status);
+            }
+
+            printf("z: ");
+            for (int i = 0; i < SIZE; i++) {
+                printf("%d ", z[i]);
+            }
+        }
+        else {
+            MPI_Probe(0, 10, MPI_COMM_WORLD, &status);
+            MPI_Get_count(&status, MPI_INT, &count);
+            int x[PART];
+            int y[PART];
+            int z[PART];
+
+            MPI_Recv(&x[0], count, MPI_INT, 0, 10, MPI_COMM_WORLD, &status);
+            MPI_Recv(&y[0], count, MPI_INT, 0, 10, MPI_COMM_WORLD, &status);
+
+            for (int i = 0; i < count; ++i) {
+                z[i] = a * x[i] + b * y[i];
+            }
+            MPI_Send(&z, count, MPI_INT, 0, 10, MPI_COMM_WORLD);
+        }
+
+        MPI_Finalize();
+    }
+}
+
+
+namespace Tasl2_2{
+int main(int argc, char** argv) {
+    MPI_Init(&argc, &argv);
+
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    const int matrix_size = 5;
+    const int vector_size = 5;
+
+    double matrix[matrix_size][matrix_size];
+    double vector[vector_size];
+    double result[matrix_size];
+
+    if (rank == 0) {
+
+        std::cout <<"matrix" << std::endl;
+        for (int i = 0; i < matrix_size; i++) {
+            for (int j = 0; j < matrix_size; j++) {
+                matrix[i][j] = i*matrix_size+j;
+                std::cout <<matrix[i][j]<<"   ";
+            }
+            std::cout << std::endl;
+        }
+
+        std::cout <<"vector" << std::endl;
+        for (int i = 0; i < vector_size; i++) {
+            vector[i] = i;
+            std::cout << vector[i]<<"   ";
+        }
+    }
+
+    if (rank == 0) {
+        for (int i = 1; i < size; i++) {
+            MPI_Send(&matrix[0][0], matrix_size * matrix_size, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&vector[0], vector_size, MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
+        }
+    }
+    else {
+        MPI_Recv(&matrix[0][0], matrix_size * matrix_size, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&vector[0], vector_size, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+
+    int local_size = matrix_size / size;
+    int start_row = rank * local_size;
+    int end_row = start_row + local_size;
+
+    for (int i = start_row; i < end_row; i++) {
+        result[i] = 0;
+        for (int j = 0; j < matrix_size; j++) {
+            result[i] += matrix[i][j] * vector[j];
+        }
+    }
+
+    if (rank == 0) {
+        for (int i = 1; i < size; i++) {
+            MPI_Recv(&result[i * local_size], local_size, MPI_DOUBLE, i, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        for (int i = 0; i < matrix_size; i++) {
+            std::cout << "result[" << i << "] = " << result[i] << std::endl;
+        }
+    }
+    else {
+        MPI_Send(&result[start_row], local_size, MPI_DOUBLE, 0, 2, MPI_COMM_WORLD);
+    }
+
+    MPI_Finalize();
+    return 0;
+}
+}
+
+namespace Task2_3
+
+const int SIZE = 10;
+
+void multiplyMatrices(double matrix1[SIZE][SIZE], double matrix2[SIZE][SIZE], double result[SIZE][SIZE]) {
+    for (int i = 0; i < SIZE; ++i) {
+        for (int j = 0; j < SIZE; ++j) {
+            result[i][j] = 0.0;
+                result[i][j] = matrix1[i][j] * matrix2[i][j];
+            
+        }
+    }
+}
+
+int main(int argc, char** argv) {
+    int rank, size;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    double matrix1[SIZE][SIZE];
+    double matrix2[SIZE][SIZE];
+    double localResult[SIZE][SIZE];
+
+    // В процессе с рангом 0
+    if (rank == 0) {
+        // Генерация матриц
+        for (int i = 0; i < SIZE; ++i) {
+            for (int j = 0; j < SIZE; ++j) {
+                matrix1[i][j] = i * SIZE + j;
+                matrix2[i][j] = j * SIZE + i;
+            }
+        }
+
+        std::cout << "matrix1:\n";
+        for (int i = 0; i < SIZE; ++i) {
+            for (int j = 0; j < SIZE; ++j) {
+                std::cout << matrix1[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+
+        std::cout << "matrix2:\n";
+        for (int i = 0; i < SIZE; ++i) {
+            for (int j = 0; j < SIZE; ++j) {
+                std::cout << matrix2[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+
+        // Распределение данных среди процессов
+        for (int i = 1; i < size; ++i) {
+            MPI_Send(matrix1, SIZE * SIZE, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(matrix2, SIZE * SIZE, MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
+        }
+    }
+    else {
+        // Получение данных от процесса 0
+        MPI_Recv(matrix1, SIZE * SIZE, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(matrix2, SIZE * SIZE, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+
+    // Вычисление части результирующей матрицы
+    multiplyMatrices(matrix1, matrix2, localResult);
+
+    if (rank == 0) {
+        double result[SIZE][SIZE];
+
+        // Получение результатов от остальных процессов
+        for (int i = 1; i < size; ++i) {
+            MPI_Recv(result, SIZE * SIZE, MPI_DOUBLE, i, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+
+        // Вывод результата
+        std::cout << "Resulting matrix:\n";
+        for (int i = 0; i < SIZE; ++i) {
+            for (int j = 0; j < SIZE; ++j) {
+                std::cout << result[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
+    else {
+        // Отправка результатов обратно процессу 0
+        MPI_Send(localResult, SIZE * SIZE, MPI_DOUBLE, 0, 2, MPI_COMM_WORLD);
+    }
+
+    MPI_Finalize();
+
+    return 0;
+}
+}
+
+namespace Task2_4{
+const int SIZE = 10;
+
+void multiplyMatrices(double matrix1[SIZE][SIZE], double matrix2[SIZE][SIZE], double result[SIZE][SIZE]) {
+    for (int i = 0; i < SIZE; ++i) {
+        for (int j = 0; j < SIZE; ++j) {
+            result[i][j] = 0.0;
+            for (int k = 0; k < SIZE; ++k) {
+                result[i][j] += matrix1[i][k] * matrix2[k][j];
+            }
+        }
+    }
+}
+
+int main(int argc, char** argv) {
+    int rank, size;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    double matrix1[SIZE][SIZE];
+    double matrix2[SIZE][SIZE];
+    double localResult[SIZE][SIZE];
+
+    // В процессе с рангом 0
+    if (rank == 0) {
+        // Генерация матриц
+        for (int i = 0; i < SIZE; ++i) {
+            for (int j = 0; j < SIZE; ++j) {
+                matrix1[i][j] = i * SIZE + j;
+                matrix2[i][j] = j * SIZE + i;
+            }
+        }
+
+        std::cout << "matrix1:\n";
+        for (int i = 0; i < SIZE; ++i) {
+            for (int j = 0; j < SIZE; ++j) {
+                std::cout << matrix1[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+
+        std::cout << "matrix2:\n";
+        for (int i = 0; i < SIZE; ++i) {
+            for (int j = 0; j < SIZE; ++j) {
+                std::cout << matrix2[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+
+        // Распределение данных среди процессов
+        for (int i = 1; i < size; ++i) {
+            MPI_Send(matrix1, SIZE * SIZE, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(matrix2, SIZE * SIZE, MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
+        }
+    }
+    else {
+        // Получение данных от процесса 0
+        MPI_Recv(matrix1, SIZE * SIZE, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(matrix2, SIZE * SIZE, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+
+    // Вычисление части результирующей матрицы
+    multiplyMatrices(matrix1, matrix2, localResult);
+
+    if (rank == 0) {
+        double result[SIZE][SIZE];
+
+        // Получение результатов от остальных процессов
+        for (int i = 1; i < size; ++i) {
+            MPI_Recv(result, SIZE * SIZE, MPI_DOUBLE, i, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+
+        // Вывод результата
+        std::cout << "Resulting matrix:\n";
+        for (int i = 0; i < SIZE; ++i) {
+            for (int j = 0; j < SIZE; ++j) {
+                std::cout << result[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
+    else {
+        // Отправка результатов обратно процессу 0
+        MPI_Send(localResult, SIZE * SIZE, MPI_DOUBLE, 0, 2, MPI_COMM_WORLD);
+    }
+
+    MPI_Finalize();
+
+    return 0;
+}
+}
+
+namespace Task2_5 {
+
+    const int SIZE = 5;
+
+    void transposeMatrix(double matrix[SIZE][SIZE], double result[SIZE][SIZE]) {
+        for (int i = 0; i < SIZE; ++i) {
+            for (int j = 0; j < SIZE; ++j) {
+                result[j][i] = matrix[i][j];
+            }
+        }
+    }
+
+    int main(int argc, char** argv) {
+        int rank, size;
+
+        MPI_Init(&argc, &argv);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+        double matrix[SIZE][SIZE];
+        double transposedMatrix[SIZE][SIZE];
+
+        // В процессе с рангом 0
+        if (rank == 0) {
+            srand(static_cast<unsigned>(time(NULL)));
+            // Генерация матрицы
+            for (int i = 0; i < SIZE; ++i) {
+                for (int j = 0; j < SIZE; ++j) {
+                    matrix[i][j] = i * SIZE + j;
+                }
+            }
+
+            std::cout << "Original matrix:\n";
+            for (int i = 0; i < SIZE; ++i) {
+                for (int j = 0; j < SIZE; ++j) {
+                    std::cout << matrix[i][j] << " ";
+                }
+                std::cout << std::endl;
+            }
+
+            // Распределение данных среди процессов
+            for (int i = 1; i < size; ++i) {
+                MPI_Send(matrix, SIZE * SIZE, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            }
+        }
+        else {
+            // Получение данных от процесса 0
+            MPI_Recv(matrix, SIZE * SIZE, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+
+        // Транспонирование матрицы
+        transposeMatrix(matrix, transposedMatrix);
+
+        if (rank == 0) {
+            double result[SIZE][SIZE];
+
+            // Получение результатов от остальных процессов
+            for (int i = 1; i < size; ++i) {
+                MPI_Recv(result, SIZE * SIZE, MPI_DOUBLE, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                // Объединение результатов
+                for (int j = 0; j < SIZE; ++j) {
+                    for (int k = 0; k < SIZE; ++k) {
+                        if (result[j][k] == 0) {
+                            result[j][k] += transposedMatrix[j][k];
+                        }
+                    }
+                }
+            }
+
+            // Вывод результата
+            std::cout << "Transposed matrix:\n";
+            for (int i = 0; i < SIZE; ++i) {
+                for (int j = 0; j < SIZE; ++j) {
+                    std::cout << result[i][j] << " ";
+                }
+                std::cout << std::endl;
+            }
+        }
+        else {
+            // Отправка результата обратно процессу 0
+            MPI_Send(transposedMatrix, SIZE * SIZE, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD);
+        }
+
+        MPI_Finalize();
+
+        return 0;
+    }
+}
+
+
+namespace Task3_1 {
+    const int VECTOR_SIZE = 100;
+
+    int main(int argc, char** argv) {
+        int rank, size;
+        MPI_Init(&argc, &argv);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+        double vector[VECTOR_SIZE];
+
+        if (rank == 0) {
+            // Заполнение вектора на нулевом процессе
+            std::cout << "Vector:\n";
+            for (int i = 0; i < VECTOR_SIZE; ++i) {
+                vector[i] = rand() % 100 + 1;
+                std::cout << vector[i] << " ";
+            }
+        }
+
+        double local_sum = 0.0;
+        double local_norm = 0.0;
+
+        // Размер подвектора для каждого процесса
+        int local_size = VECTOR_SIZE / size;
+
+        double local_vector[20];
+
+        // Разделение вектора между процессами
+        MPI_Scatter(vector, local_size, MPI_DOUBLE, local_vector, local_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+        // Вычисление нормы подвектора
+        for (int i = 0; i < local_size; ++i) {
+            local_sum += local_vector[i];
+        }
+
+        // Суммирование норм подвекторов на нулевом процессе
+        MPI_Reduce(&local_sum, &local_norm, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+        if (rank == 0) {
+            std::cout << "Norm: " << local_norm << std::endl;
+        }
+
+        MPI_Finalize();
+        return 0;
+    }
+}
+
+namespace Task3_2 {
+    const int VECTOR_SIZE = 100;
+
+    int main(int argc, char** argv) {
+        int rank, size;
+        MPI_Init(&argc, &argv);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+        double vector1[VECTOR_SIZE];
+        double vector2[VECTOR_SIZE];
+
+        if (rank == 0) {
+            // Заполнение векторов на нулевом процессе
+            std::cout << "Vector1:\n";
+            for (int i = 0; i < VECTOR_SIZE; ++i) {
+                vector1[i] = rand() % 100 + 1;
+                std::cout << vector1[i] << " ";
+
+            }
+            std::cout << "Vector2:\n";
+            for (int i = 0; i < VECTOR_SIZE; ++i) {
+                vector2[i] = rand() % 100 + 1;
+                std::cout << vector2[i] << " ";
+            }
+        }
+
+        double local_sum = 0.0;
+        double local_product = 0.0;
+
+        // Размер подвектора для каждого процесса
+        int local_size = VECTOR_SIZE / size;
+
+        double local_vector1[20];
+        double local_vector2[20];
+
+        // Разделение векторов между процессами
+        MPI_Scatter(vector1, local_size, MPI_DOUBLE, local_vector1, local_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        MPI_Scatter(vector2, local_size, MPI_DOUBLE, local_vector2, local_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+        // Вычисление локального скалярного произведения
+        for (int i = 0; i < local_size; ++i) {
+            local_product += local_vector1[i] * local_vector2[i];
+        }
+
+        // Суммирование скалярных произведений на нулевом процессе
+        MPI_Reduce(&local_product, &local_sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+        if (rank == 0) {
+            std::cout << "Result: " << local_sum << std::endl;
+        }
+
+        MPI_Finalize();
+        return 0;
+    }
+}
+namespace Tasl3_3{
+const int MATRIX_SIZE = 100;
+const int VECTOR_SIZE = 100;
+
+int main(int argc, char** argv) {
+    int rank, size;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    double matrix[MATRIX_SIZE][MATRIX_SIZE];
+    double vector[VECTOR_SIZE];
+    double local_result[MATRIX_SIZE] = { 0 };
+
+    if (rank == 0) {
+        // Генерация матрицы и вектора на нулевом процессе
+        std::cout << "Matrix:\n";
+        for (int i = 0; i < MATRIX_SIZE; ++i) {
+            for (int j = 0; j < MATRIX_SIZE; ++j) {
+                matrix[i][j] = rand() % 100 + 1;
+                std::cout << matrix[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "Vector:\n";
+        for (int i = 0; i < VECTOR_SIZE; ++i) {
+            vector[i] = rand() % 100 + 1;
+            std::cout << vector[i] << " ";
+        }
+    }
+
+    // Рассылка вектора всем процессам
+    MPI_Bcast(vector, VECTOR_SIZE, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Размер подматрицы для каждого процесса
+    int local_rows = MATRIX_SIZE / size;
+
+    double local_matrix[20][MATRIX_SIZE];
+
+    // Распределение частей матрицы
+    MPI_Scatter(matrix, local_rows * MATRIX_SIZE, MPI_DOUBLE, local_matrix, local_rows * MATRIX_SIZE, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Умножение матрицы на вектор
+    for (int i = 0; i < local_rows; ++i) {
+        for (int j = 0; j < MATRIX_SIZE; ++j) {
+            local_result[i] += local_matrix[i][j] * vector[j];
+        }
+    }
+
+    // Сбор результатов на нулевом процессе
+    double global_result[MATRIX_SIZE];
+    MPI_Gather(local_result, local_rows, MPI_DOUBLE, global_result, local_rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        // Вывод результата на нулевом процессе
+        std::cout << "Resulting vector:" << std::endl;
+        for (int i = 0; i < MATRIX_SIZE; ++i) {
+            std::cout << global_result[i] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    MPI_Finalize();
+    return 0;
+}
+}
+
+namespace Tasl3_4{
+
+const int MATRIX_SIZE = 100;
+
+int main(int argc, char** argv) {
+    int rank, size;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    int matrix[MATRIX_SIZE][MATRIX_SIZE];
+    int local_max = 0;
+
+    if (rank == 0) {
+        // Генерация матрицы на нулевом процессе
+        std::cout << "Matrix:\n";
+        for (int i = 0; i < MATRIX_SIZE; ++i) {
+            for (int j = 0; j < MATRIX_SIZE; ++j) {
+                matrix[i][j] = i*MATRIX_SIZE+j;
+                std::cout << matrix[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
+
+    // Размер подматрицы для каждого процесса
+    int local_rows = MATRIX_SIZE / size;
+
+    int local_matrix[20][MATRIX_SIZE];
+   
+
+    // Распределение частей матрицы
+    MPI_Scatter(matrix, local_rows * MATRIX_SIZE, MPI_INT, local_matrix, local_rows * MATRIX_SIZE, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Вычисление максимума для каждой строки локальной матрицы
+    for (int i = 0; i < MATRIX_SIZE; i++) {
+        int row_sum = 0;
+        for (int j = 0; j< MATRIX_SIZE; j++) {
+            row_sum += std::abs(matrix[j][i]);
+       
+        }
+        if (row_sum > local_max) {
+            local_max = row_sum;
+            std::cout <<"rank"<<rank <<" " << local_max << std::endl;
+        }
+    }
+
+    // Нахождение максимального значения среди всех процессов
+    int global_max = 0;
+    MPI_Reduce(&local_max, &global_max, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+   
+    if (rank == 0) {
+        // Вывод результата на нулевом процессе
+        std::cout << "Norm of the matrix: " << global_max << std::endl;
+    }
+
+    MPI_Finalize();
+    return 0;
+}
+
+}
+
+const int VECTOR_SIZE = 100;
+
+int main(int argc, char** argv) {
+    int rank, size;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    int vector[VECTOR_SIZE];
+
+    if (rank == 0) {
+        // Генерация вектора на нулевом процессе
+        std::cout << "Vector";
+        for (int i = 0; i < VECTOR_SIZE; ++i) {
+            vector[i] = i*VECTOR_SIZE;
+            std::cout << vector[i] << " ";
+        }
+    }
+
+    // Размер подвектора для каждого процесса
+    int local_size = VECTOR_SIZE / size;
+
+    int local_vector[20];
+
+    // Распределение частей вектора
+    MPI_Scatter(vector, local_size, MPI_INT, local_vector, local_size, MPI_INT, 0, MPI_COMM_WORLD);
+
+    int local_max_value = 0;
+    int local_max_index = 0;
+ 
+   
+    // Поиск локального максимума
+    for (int i = 0; i < local_size; ++i) {
+        if (local_vector[i] > local_max_value) {
+            local_max_value = local_vector[i];
+            local_max_index = i;
+            std::cout << local_max_value << "n\ ";
+        }
+    }
+
+    // Нахождение глобального максимума и его индекса
+    int global_max_value;
+    int global_max_index;
+
+    MPI_Reduce(&local_max_value, &global_max_value, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&local_max_index, &global_max_index, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        // Вывод локальных максимумов
+        for (int i = 0; i < size; ++i) {
+            std::cout << "Rank " << i << ": Max value = " << global_max_value << ", Index = " << (i * local_size + global_max_index) << std::endl;
+        }
+    }
+
+    MPI_Finalize();
+    return 0;
+}
